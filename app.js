@@ -50,11 +50,11 @@
       perfect: "Excellent!",
       good: "Good job!",
       retry: "Try one more time!",
-      blocked: "Speech recognition may be blocked in this browser. JINHO can say it out loud and a parent can score it.",
+      blocked: "Automatic voice score is not available in this browser. Please use Record voice to record and play back JINHO’s voice.",
       micBlocked: "Microphone recording is blocked. Use HTTPS GitHub Pages and allow microphone access.",
       recording: "Recording... Tap Stop when JINHO finishes.",
       recorded: "Recorded. Play it back below.",
-      parent: "Parent score",
+      parent: "Automatic score unavailable",
       pPerfect: "Perfect",
       pGood: "Good",
       pRetry: "Retry",
@@ -107,11 +107,11 @@
       perfect: "아주 잘했어요!",
       good: "잘했어요!",
       retry: "한 번 더 해봐요!",
-      blocked: "이 브라우저에서 음성 인식이 막힐 수 있습니다. JINHO가 말하고 부모가 점수 버튼을 누를 수 있습니다.",
+      blocked: "이 브라우저에서는 자동 말하기 점수를 사용할 수 없습니다. Record voice로 JINHO의 목소리를 녹음하고 다시 들어보세요.",
       micBlocked: "마이크 녹음이 막혔습니다. GitHub Pages HTTPS 주소에서 마이크를 허용해 주세요.",
       recording: "녹음 중... JINHO가 말한 뒤 정지를 누르세요.",
       recorded: "녹음 완료. 아래에서 다시 들어보세요.",
-      parent: "부모 점수",
+      parent: "자동 점수 사용 불가",
       pPerfect: "완벽해요",
       pGood: "잘했어요",
       pRetry: "다시",
@@ -454,10 +454,6 @@
 
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) stopBtn.addEventListener("click", stopRecording);
-
-    document.querySelectorAll("[data-manual-score]").forEach((button) => {
-      button.addEventListener("click", () => manualScore(Number(button.dataset.manualScore)));
-    });
   }
 
   function listen(slow) {
@@ -499,11 +495,6 @@
       <div class="speech-fallback">
         <h3>${T("parent")}</h3>
         <p class="muted">${T("blocked")}</p>
-        <div class="parent-score">
-          <button data-manual-score="100">${T("pPerfect")}</button>
-          <button class="secondary" data-manual-score="80">${T("pGood")}</button>
-          <button class="warning" data-manual-score="40">${T("pRetry")}</button>
-        </div>
       </div>
     `;
   }
@@ -513,7 +504,7 @@
     return `
       <div class="record-box">
         <h3>🎙 ${T("record")}</h3>
-        <p class="muted">${state.lang === "en" ? "Record JINHO’s voice and play it back." : "JINHO의 목소리를 녹음하고 다시 들어볼 수 있어요."}</p>
+        <p class="muted">${state.lang === "en" ? "Record JINHO’s real voice and play it back. This does not use parent scoring." : "JINHO의 실제 목소리를 녹음하고 다시 들어볼 수 있어요. 부모 점수 기능은 사용하지 않습니다."}</p>
         <div class="actions">
           <button id="recordBtn">${T("record")}</button>
           <button class="warning" id="stopBtn">${T("stop")}</button>
@@ -641,19 +632,10 @@
     }
   }
 
-  function manualScore(score) {
-    if (score >= 70) {
-      applyScore(currentItem().korean);
-    } else {
-      state.score = score;
-      state.recognized = "-";
-      state.feedback = `<span class="bad">${T("retry")}</span>`;
-      state.progress.attempts += 1;
-      state.correctRow = 0;
-      addWeak(currentItem().korean);
-      save();
-      render();
-    }
+  function manualScore() {
+    state.fallback = true;
+    state.feedback = `<span class="bad">${T("blocked")}</span>`;
+    render();
   }
 
 
