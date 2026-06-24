@@ -52,8 +52,8 @@
       retry: "Try one more time!",
       blocked: "Speech recognition may be blocked in this browser. JINHO can say it out loud and a parent can score it.",
       micBlocked: "Microphone recording is blocked. Use HTTPS GitHub Pages and allow microphone access.",
-      recording: "Recording...",
-      recorded: "Recorded. Play it back.",
+      recording: "Recording... Tap Stop when JINHO finishes.",
+      recorded: "Recorded. Play it back below.",
       parent: "Parent score",
       pPerfect: "Perfect",
       pGood: "Good",
@@ -109,8 +109,8 @@
       retry: "한 번 더 해봐요!",
       blocked: "이 브라우저에서 음성 인식이 막힐 수 있습니다. JINHO가 말하고 부모가 점수 버튼을 누를 수 있습니다.",
       micBlocked: "마이크 녹음이 막혔습니다. GitHub Pages HTTPS 주소에서 마이크를 허용해 주세요.",
-      recording: "녹음 중...",
-      recorded: "녹음 완료. 다시 들어보세요.",
+      recording: "녹음 중... JINHO가 말한 뒤 정지를 누르세요.",
+      recorded: "녹음 완료. 아래에서 다시 들어보세요.",
       parent: "부모 점수",
       pPerfect: "완벽해요",
       pGood: "잘했어요",
@@ -656,17 +656,61 @@
     }
   }
 
+
+  function getSupportedAudioMimeType() {
+    if (typeof MediaRecorder === "undefined") return "";
+
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+      "audio/aac",
+      ""
+    ];
+
+    for (const type of candidates) {
+      try {
+        if (!type || MediaRecorder.isTypeSupported(type)) return type;
+      } catch (error) {
+        // Continue to next candidate.
+      }
+    }
+
+    return "";
+  }
+
+  function isSecureForMicrophone() {
+    return window.isSecureContext || location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  }
+
   async function startRecording() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    if (!isSecureForMicrophone()) {
+      state.feedback = `<span class="bad">HTTPS required. Open the GitHub Pages https:// address.</span>`;
+      render();
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
       state.feedback = `<span class="bad">${T("micBlocked")}</span>`;
       render();
       return;
     }
 
     try {
-      state.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stopStream();
+
+      state.stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+
       state.chunks = [];
-      state.recorder = new MediaRecorder(state.stream);
+      const mimeType = getSupportedAudioMimeType();
+      const options = mimeType ? { mimeType } : undefined;
+      state.recorder = new MediaRecorder(state.stream, options);
 
       state.recorder.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
@@ -674,35 +718,51 @@
         }
       };
 
-      state.recorder.onstop = () => {
-        const blob = new Blob(state.chunks, { type: "audio/webm" });
-        if (state.audioUrl) URL.revokeObjectURL(state.audioUrl);
-        state.audioUrl = URL.createObjectURL(blob);
+      state.recorder.onerror = () => {
         stopStream();
-        state.feedback = `<span class="good">${T("recorded")}</span>`;
+        state.feedback = `<span class="bad">${T("micBlocked")}</span>`;
         render();
       };
 
-      state.recorder.start();
+      state.recorder.onstop = () => {
+        try {
+          const type = state.chunks[0] && state.chunks[0].type ? state.chunks[0].type : "audio/webm";
+          const blob = new Blob(state.chunks, { type });
+          if (state.audioUrl) URL.revokeObjectURL(state.audioUrl);
+          state.audioUrl = URL.createObjectURL(blob);
+          state.feedback = `<span class="good">${T("recorded")}</span>`;
+        } catch (error) {
+          state.feedback = `<span class="bad">${T("micBlocked")}</span>`;
+        }
+
+        stopStream();
+        render();
+      };
+
+      state.recorder.start(250);
       state.feedback = `<span class="good">${T("recording")}</span>`;
       render();
     } catch (error) {
       stopStream();
-      state.feedback = `<span class="bad">${T("micBlocked")}</span>`;
+      state.feedback = `<span class="bad">${T("micBlocked")} (${escapeHtml(error.name || error.message)})</span>`;
       render();
     }
   }
 
   function stopRecording() {
     try {
-      if (state.recorder && state.recorder.state !== "inactive") {
+      if (state.recorder && state.recorder.state === "recording") {
         state.recorder.stop();
       } else {
+        state.feedback = state.lang === "en"
+          ? "No active recording. Tap Record voice first."
+          : "진행 중인 녹음이 없습니다. 먼저 음성 녹음을 눌러주세요.";
         stopStream();
+        render();
       }
     } catch (error) {
       stopStream();
-      state.feedback = `<span class="bad">${T("micBlocked")}</span>`;
+      state.feedback = `<span class="bad">${T("micBlocked")} (${escapeHtml(error.name || error.message)})</span>`;
       render();
     }
   }
